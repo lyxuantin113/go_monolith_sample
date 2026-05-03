@@ -13,24 +13,33 @@ import (
 
 func main() {
 	godotenv.Load()
-	database, _ := db.InitPostgres() // Giả sử em đã bỏ qua check error ở đây cho nhanh
+	database, err := db.InitPostgres()
+	if err != nil {
+		log.Fatal(err)
+	}
 
+	// 1. Khởi tạo các lớp (Wiring)
 	repo := repository.NewMedicineRepository(database)
 	sev := service.NewMedicineService(repo)
 	handler := delivery.NewMedicineHandler(sev)
 
-	router := gin.Default()
+	// 2. Khởi tạo Gin
+	r := gin.Default()
 
-	api := router.Group("api/v1/medicines")
+	// 3. Đăng ký Routes
+	api := r.Group("/api/v1")
 	{
-		api.POST("/", handler.CreateMedicine)
-		api.PUT("/:id", handler.UpdateMedicine)
-		api.DELETE("/:id", handler.DeleteMedicine)
-		api.GET("/:id", handler.GetMedicineByID)
-		api.GET("/", handler.GetAllMedicines)
+		medicines := api.Group("/medicines")
+		{
+			medicines.POST("", handler.CreateMedicine)
+			medicines.GET("", handler.GetAllMedicines)
+			medicines.GET("/:id", handler.GetMedicineByID)
+			medicines.PUT("/:id", handler.UpdateMedicine)
+			medicines.DELETE("/:id", handler.DeleteMedicine)
+		}
 	}
 
 	// 4. Chạy Server
-	log.Println("Server đang chạy tại cổng :8080")
-	router.Run(":8080")
+	log.Println("Server đang chạy tại port 8080...")
+	r.Run(":8080")
 }

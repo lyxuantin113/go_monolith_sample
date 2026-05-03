@@ -21,12 +21,25 @@ func NewMedicineHandler(medicineService domain.MedicineService) *MedicineHandler
 }
 
 func (h *MedicineHandler) CreateMedicine(ctx *gin.Context) {
-	var medicine domain.Medicine
+	var medicine dto.CreateMedicineRequest
 	if err := ctx.ShouldBindJSON(&medicine); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if err := h.medicineService.CreateMedicine(&medicine); err != nil {
+
+	if errs := utils.ValidateStruct(medicine); errs != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"errors": errs})
+		return
+	}
+
+	medicineDomain := &domain.Medicine{
+		Name:        medicine.Name,
+		Price:       medicine.Price,
+		Stock:       medicine.Stock,
+		Description: medicine.Description,
+	}
+
+	if err := h.medicineService.CreateMedicine(medicineDomain); err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -42,7 +55,6 @@ func (h *MedicineHandler) UpdateMedicine(c *gin.Context) {
 		return
 	}
 
-	// Validate tự động
 	if errs := utils.ValidateStruct(req); errs != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"errors": errs})
 		return

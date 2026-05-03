@@ -23,6 +23,7 @@ type MedicineRepository interface {
 	GetAll() ([]Medicine, error)
 	Update(id uint, medicine *Medicine) error
 	Delete(id uint) error
+	Transaction(fn func(repo MedicineRepository) error) error
 }
 
 type MedicineService interface {

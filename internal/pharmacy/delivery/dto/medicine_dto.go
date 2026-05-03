@@ -1,6 +1,5 @@
 package dto
 
-// CreateMedicineRequest dành cho POST
 type CreateMedicineRequest struct {
 	Name        string  `json:"name" validate:"required,min=3"`
 	Price       float64 `json:"price" validate:"required,gt=0"`
@@ -8,7 +7,6 @@ type CreateMedicineRequest struct {
 	Description string  `json:"description"`
 }
 
-// UpdateMedicineRequest dành cho PUT/PATCH (Dùng con trỏ để hỗ trợ partial update)
 type UpdateMedicineRequest struct {
 	Name        *string  `json:"name" validate:"omitempty,min=3"`
 	Price       *float64 `json:"price" validate:"omitempty,gt=0"`

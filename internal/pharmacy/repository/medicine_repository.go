@@ -10,7 +10,7 @@ type medicineRepository struct {
 	db *gorm.DB
 }
 
-func NewMedicineRepository(db *gorm.DB) domain.MedicineRepository {
+func NewMedicineRepository(db *gorm.DB) *medicineRepository {
 	return &medicineRepository{
 		db: db,
 	}
@@ -42,6 +42,12 @@ func (r *medicineRepository) Delete(id uint) error {
 		return err
 	}
 	return nil
+}
+
+func (r *medicineRepository) Transaction(fn func(domain.MedicineRepository) error) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		return fn(r.WithTransaction(tx))
+	})
 }
 
 func (r *medicineRepository) GetByID(id uint) (*domain.Medicine, error) {
