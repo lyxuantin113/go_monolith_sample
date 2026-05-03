@@ -1,0 +1,25 @@
+.env
+go.sum
+
+# compiled output files
+*.exe
+*.out
+
+# dependencies
+/vendor
+
+# test cache
+.cache/
+*.test
+
+# IDEs
+.vscode/
+.idea/
+
+docker-compose.yml
+docker
+
+go.mod
+go.sum
+
+pkg/*
