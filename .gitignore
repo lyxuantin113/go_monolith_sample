@@ -21,5 +21,3 @@ docker
 
 go.mod
 go.sum
-
-pkg/*
