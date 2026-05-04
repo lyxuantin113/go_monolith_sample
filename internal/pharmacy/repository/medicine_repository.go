@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"go_monolith_sample/internal/domain"
 
 	"gorm.io/gorm"
@@ -20,24 +21,26 @@ func (r *medicineRepository) WithTransaction(tx *gorm.DB) domain.MedicineReposit
 	return &medicineRepository{db: tx}
 }
 
-func (r *medicineRepository) Create(data *domain.Medicine) error {
-	err := r.db.Create(data).Error
+func (r *medicineRepository) Create(ctx context.Context, data *domain.Medicine) error {
+	err := r.db.WithContext(ctx).Create(data).Error
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (r *medicineRepository) Update(id uint, medicine *domain.Medicine) error {
-	err := r.db.Model(&domain.Medicine{}).Where("id = ?", id).Updates(medicine).Error
+func (r *medicineRepository) Update(ctx context.Context, id uint, medicine *domain.Medicine) error {
+	medicine.ID = id
+
+	err := r.db.WithContext(ctx).Save(medicine).Error
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (r *medicineRepository) Delete(id uint) error {
-	err := r.db.Delete(&domain.Medicine{}, "id = ?", id).Error
+func (r *medicineRepository) Delete(ctx context.Context, id uint) error {
+	err := r.db.WithContext(ctx).Delete(&domain.Medicine{}, "id = ?", id).Error
 	if err != nil {
 		return err
 	}
@@ -50,17 +53,37 @@ func (r *medicineRepository) Transaction(fn func(domain.MedicineRepository) erro
 	})
 }
 
-func (r *medicineRepository) GetByID(id uint) (*domain.Medicine, error) {
+func (r *medicineRepository) GetByID(ctx context.Context, id uint) (*domain.Medicine, error) {
 	var medicine domain.Medicine
-	err := r.db.First(&medicine, "id = ?", id).Error
+	err := r.db.WithContext(ctx).First(&medicine, "id = ?", id).Error
 	if err != nil {
 		return nil, err
 	}
 	return &medicine, nil
 }
 
-func (r *medicineRepository) GetAll() ([]domain.Medicine, error) {
+func (r *medicineRepository) GetAll(ctx context.Context, page, pageSize int) ([]domain.Medicine, *domain.Pagination, error) {
 	var medicines []domain.Medicine
-	err := r.db.Find(&medicines).Error
-	return medicines, err
+	var total int64
+
+	err := r.db.WithContext(ctx).Model(&domain.Medicine{}).Count(&total).Error
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Tính toán offset cho phân trang
+	offset := (page - 1) * pageSize
+
+	err = r.db.WithContext(ctx).Offset(offset).Limit(pageSize).Find(&medicines).Error
+	if err != nil {
+		return nil, nil, err
+	}
+
+	pagination := &domain.Pagination{
+		Page:     page,
+		PageSize: pageSize,
+		Total:    total,
+	}
+
+	return medicines, pagination, nil
 }

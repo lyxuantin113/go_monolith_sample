@@ -1,6 +1,16 @@
 package domain
 
-import "time"
+import (
+	"context"
+	"errors"
+	"time"
+)
+
+type Pagination struct {
+	Page     int   `json:"page" default:"1"`
+	PageSize int   `json:"page_size" default:"12"`
+	Total    int64 `json:"total"`
+}
 
 type Base struct {
 	ID        uint       `gorm:"primarykey" json:"id"`
@@ -18,20 +28,20 @@ type Medicine struct {
 }
 
 type MedicineRepository interface {
-	Create(medicine *Medicine) error
-	GetByID(id uint) (*Medicine, error)
-	GetAll() ([]Medicine, error)
-	Update(id uint, medicine *Medicine) error
-	Delete(id uint) error
+	Create(ctx context.Context, medicine *Medicine) error
+	GetByID(ctx context.Context, id uint) (*Medicine, error)
+	GetAll(ctx context.Context, page, pageSize int) ([]Medicine, *Pagination, error)
+	Update(ctx context.Context, id uint, medicine *Medicine) error
+	Delete(ctx context.Context, id uint) error
 	Transaction(fn func(repo MedicineRepository) error) error
 }
 
 type MedicineService interface {
-	CreateMedicine(medicine *Medicine) error
-	UpdateMedicine(id uint, input UpdateMedicineInput) error
-	DeleteMedicine(id uint) error
-	GetMedicineByID(id uint) (*Medicine, error)
-	GetAllMedicines() ([]Medicine, error)
+	CreateMedicine(ctx context.Context, medicine *Medicine) error
+	UpdateMedicine(ctx context.Context, id uint, input UpdateMedicineInput) error
+	DeleteMedicine(ctx context.Context, id uint) error
+	GetMedicineByID(ctx context.Context, id uint) (*Medicine, error)
+	GetAllMedicines(ctx context.Context, page, pageSize int) ([]Medicine, *Pagination, error)
 }
 
 type UpdateMedicineInput struct {
@@ -39,4 +49,25 @@ type UpdateMedicineInput struct {
 	Description *string
 	Stock       *int
 	Price       *float64
+}
+
+// Validate
+var (
+	ErrMedicineNotFound = errors.New("không tìm thấy thuốc")
+	ErrInvalidName      = errors.New("tên thuốc không được để trống")
+	ErrInvalidPrice     = errors.New("giá thuốc phải lớn hơn 0")
+	ErrInvalidStock     = errors.New("số lượng tồn kho không được âm")
+)
+
+func (m *Medicine) Validate() error {
+	if m.Name == "" {
+		return ErrInvalidName
+	}
+	if m.Price <= 0 {
+		return ErrInvalidPrice
+	}
+	if m.Stock < 0 {
+		return ErrInvalidStock
+	}
+	return nil
 }

@@ -1,7 +1,7 @@
 package service
 
 import (
-	"errors"
+	"context"
 	"go_monolith_sample/internal/domain"
 )
 
@@ -15,31 +15,22 @@ func NewMedicineService(medicineRepo domain.MedicineRepository) *medicineService
 	}
 }
 
-func (s *medicineService) CreateMedicine(medicine *domain.Medicine) error {
+func (s *medicineService) CreateMedicine(ctx context.Context, medicine *domain.Medicine) error {
 
-	if medicine.Name == "" {
-		return errors.New("Tên thuốc không được để trống")
+	if err := medicine.Validate(); err != nil {
+		return err
 	}
-
-	if medicine.Stock < 0 {
-		return errors.New("Số lượng tồn kho không được âm")
-	}
-
-	if medicine.Price <= 0 {
-		return errors.New("Giá thuốc phải lớn hơn 0")
-	}
-
-	return s.medicineRepo.Create(medicine)
+	return s.medicineRepo.Create(ctx, medicine)
 }
 
-func (s *medicineService) UpdateMedicine(id uint, input domain.UpdateMedicineInput) error {
+func (s *medicineService) UpdateMedicine(ctx context.Context, id uint, input domain.UpdateMedicineInput) error {
 	// Sử dụng Transaction để bọc toàn bộ quá trình Update
 	return s.medicineRepo.Transaction(func(txRepo domain.MedicineRepository) error {
 
 		// 1. Lấy dữ liệu hiện tại từ DB (Dùng txRepo để đảm bảo an toàn)
-		medicine, err := txRepo.GetByID(id)
+		medicine, err := txRepo.GetByID(ctx, id)
 		if err != nil {
-			return errors.New("Không tìm thấy thuốc để cập nhật")
+			return domain.ErrMedicineNotFound
 		}
 
 		// 2. Mapping và chuẩn bị dữ liệu mới (Patch)
@@ -56,19 +47,22 @@ func (s *medicineService) UpdateMedicine(id uint, input domain.UpdateMedicineInp
 			medicine.Description = *input.Description
 		}
 
-		// 3. Thực hiện cập nhật xuống DB (Vẫn dùng txRepo)
-		return txRepo.Update(id, medicine)
+		if err := medicine.Validate(); err != nil {
+			return err
+		}
+
+		return txRepo.Update(ctx, id, medicine)
 	})
 }
 
-func (s *medicineService) DeleteMedicine(id uint) error {
-	return s.medicineRepo.Delete(id)
+func (s *medicineService) DeleteMedicine(ctx context.Context, id uint) error {
+	return s.medicineRepo.Delete(ctx, id)
 }
 
-func (s *medicineService) GetMedicineByID(id uint) (*domain.Medicine, error) {
-	return s.medicineRepo.GetByID(id)
+func (s *medicineService) GetMedicineByID(ctx context.Context, id uint) (*domain.Medicine, error) {
+	return s.medicineRepo.GetByID(ctx, id)
 }
 
-func (s *medicineService) GetAllMedicines() ([]domain.Medicine, error) {
-	return s.medicineRepo.GetAll()
+func (s *medicineService) GetAllMedicines(ctx context.Context, page, pageSize int) ([]domain.Medicine, *domain.Pagination, error) {
+	return s.medicineRepo.GetAll(ctx, page, pageSize)
 }
