@@ -3,24 +3,12 @@ package domain
 import (
 	"context"
 	"errors"
-	"time"
+
+	"go_monolith_sample/internal/domain/common"
 )
 
-type Pagination struct {
-	Page     int   `json:"page" default:"1"`
-	PageSize int   `json:"page_size" default:"12"`
-	Total    int64 `json:"total"`
-}
-
-type Base struct {
-	ID        uint       `gorm:"primarykey" json:"id"`
-	CreatedAt time.Time  `json:"created_at"`
-	UpdatedAt time.Time  `json:"updated_at"`
-	DeletedAt *time.Time `gorm:"index" json:"-"`
-}
-
 type Medicine struct {
-	Base
+	common.Base
 	Name        string  `gorm:"type:varchar(100);notnull" json:"name" validate:"required"`
 	Description string  `gorm:"type:text" json:"description"`
 	Stock       int     `gorm:"default:0;notnull" json:"stock" validate:"min=0"`
@@ -30,10 +18,12 @@ type Medicine struct {
 type MedicineRepository interface {
 	Create(ctx context.Context, medicine *Medicine) error
 	GetByID(ctx context.Context, id uint) (*Medicine, error)
-	GetAll(ctx context.Context, page, pageSize int) ([]Medicine, *Pagination, error)
+	GetByIDs(ctx context.Context, ids []uint) ([]Medicine, error)
+	GetByIDsForUpdate(ctx context.Context, ids []uint) ([]Medicine, error)
+	GetAll(ctx context.Context, page, pageSize int, search string) ([]Medicine, *common.Pagination, error)
 	Update(ctx context.Context, id uint, medicine *Medicine) error
 	Delete(ctx context.Context, id uint) error
-	Transaction(fn func(repo MedicineRepository) error) error
+	Transaction(ctx context.Context, fn func(txCtx context.Context) error) error
 }
 
 type MedicineService interface {
@@ -41,7 +31,9 @@ type MedicineService interface {
 	UpdateMedicine(ctx context.Context, id uint, input UpdateMedicineInput) error
 	DeleteMedicine(ctx context.Context, id uint) error
 	GetMedicineByID(ctx context.Context, id uint) (*Medicine, error)
-	GetAllMedicines(ctx context.Context, page, pageSize int) ([]Medicine, *Pagination, error)
+	GetAllMedicines(ctx context.Context, page, pageSize int, search string) ([]Medicine, *common.Pagination, error)
+	GetByIDs(ctx context.Context, ids []uint) ([]Medicine, error)
+	GetByIDsForUpdate(ctx context.Context, ids []uint) ([]Medicine, error)
 }
 
 type UpdateMedicineInput struct {
@@ -53,10 +45,12 @@ type UpdateMedicineInput struct {
 
 // Validate
 var (
-	ErrMedicineNotFound = errors.New("không tìm thấy thuốc")
-	ErrInvalidName      = errors.New("tên thuốc không được để trống")
-	ErrInvalidPrice     = errors.New("giá thuốc phải lớn hơn 0")
-	ErrInvalidStock     = errors.New("số lượng tồn kho không được âm")
+	ErrMedicineNotFound        = errors.New("không tìm thấy thuốc")
+	ErrInvalidName             = errors.New("tên thuốc không được để trống")
+	ErrInvalidPrice            = errors.New("giá thuốc phải lớn hơn 0")
+	ErrInvalidStock            = errors.New("số lượng tồn kho không được âm")
+	ErrInsufficientStock       = errors.New("số lượng tồn kho không đủ")
+	ErrSomeMedicinesDoNotExist = errors.New("một số thuốc không tồn tại")
 )
 
 func (m *Medicine) Validate() error {

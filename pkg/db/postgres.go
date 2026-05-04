@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"os"
 
-	"go_monolith_sample/internal/domain"
+	"go_monolith_sample/internal/domain/inventory"
+	med "go_monolith_sample/internal/domain/medicine"
+	sales "go_monolith_sample/internal/domain/sales"
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -24,7 +26,7 @@ func InitPostgres() (*gorm.DB, error) {
 		return nil, err
 	}
 
-	err = db.AutoMigrate(&domain.Medicine{})
+	err = db.AutoMigrate(&med.Medicine{}, &sales.Order{}, &sales.OrderItem{}, &inventory.InventoryTransaction{})
 	if err != nil {
 		return nil, err
 	}

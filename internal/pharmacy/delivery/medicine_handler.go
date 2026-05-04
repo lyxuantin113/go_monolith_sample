@@ -1,21 +1,21 @@
 package delivery
 
 import (
-	"go_monolith_sample/internal/domain"
+	med "go_monolith_sample/internal/domain/medicine"
 	"go_monolith_sample/internal/pharmacy/delivery/dto"
 	apperror "go_monolith_sample/pkg/error"
 	response "go_monolith_sample/pkg/response"
-	utils "go_monolith_sample/pkg/validate"
+	validate "go_monolith_sample/pkg/validate"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
 )
 
 type MedicineHandler struct {
-	medicineService domain.MedicineService
+	medicineService med.MedicineService
 }
 
-func NewMedicineHandler(medicineService domain.MedicineService) *MedicineHandler {
+func NewMedicineHandler(medicineService med.MedicineService) *MedicineHandler {
 	return &MedicineHandler{
 		medicineService: medicineService,
 	}
@@ -28,12 +28,12 @@ func (h *MedicineHandler) CreateMedicine(ctx *gin.Context) {
 		return
 	}
 
-	if errs := utils.ValidateStruct(medicine); errs != nil {
+	if errs := validate.ValidateStruct(medicine); errs != nil {
 		response.ValidationErrors(ctx, errs)
 		return
 	}
 
-	medicineDomain := &domain.Medicine{
+	medicineDomain := &med.Medicine{
 		Name:        medicine.Name,
 		Price:       medicine.Price,
 		Stock:       medicine.Stock,
@@ -56,13 +56,13 @@ func (h *MedicineHandler) UpdateMedicine(ctx *gin.Context) {
 		return
 	}
 
-	if errs := utils.ValidateStruct(req); errs != nil {
+	if errs := validate.ValidateStruct(req); errs != nil {
 		response.ValidationErrors(ctx, errs)
 		return
 	}
 
 	// Chuyển DTO thành Domain Input
-	input := domain.UpdateMedicineInput{
+	input := med.UpdateMedicineInput{
 		Name:        req.Name,
 		Description: req.Description,
 		Stock:       req.Stock,
@@ -110,6 +110,8 @@ func (h *MedicineHandler) GetMedicineByID(ctx *gin.Context) {
 
 func (h *MedicineHandler) GetAllMedicines(ctx *gin.Context) {
 	page, err := strconv.Atoi(ctx.DefaultQuery("page", "1"))
+	search := ctx.Query("search")
+
 	if err != nil {
 		response.Error(ctx, apperror.BadRequest("Invalid page parameter", err))
 		return
@@ -121,7 +123,7 @@ func (h *MedicineHandler) GetAllMedicines(ctx *gin.Context) {
 		return
 	}
 
-	medicines, pagination, err := h.medicineService.GetAllMedicines(ctx.Request.Context(), page, pageSize)
+	medicines, pagination, err := h.medicineService.GetAllMedicines(ctx.Request.Context(), page, pageSize, search)
 	if err != nil {
 		response.Error(ctx, apperror.Internal("Lỗi khi lấy thông tin thuốc", err))
 		return

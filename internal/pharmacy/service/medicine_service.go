@@ -2,35 +2,42 @@ package service
 
 import (
 	"context"
-	"go_monolith_sample/internal/domain"
+	"go_monolith_sample/internal/domain/common"
+	med "go_monolith_sample/internal/domain/medicine"
+	"go_monolith_sample/pkg/auth"
 )
 
 type medicineService struct {
-	medicineRepo domain.MedicineRepository
+	medicineRepo med.MedicineRepository
 }
 
-func NewMedicineService(medicineRepo domain.MedicineRepository) *medicineService {
+func NewMedicineService(medicineRepo med.MedicineRepository) *medicineService {
 	return &medicineService{
 		medicineRepo: medicineRepo,
 	}
 }
 
-func (s *medicineService) CreateMedicine(ctx context.Context, medicine *domain.Medicine) error {
+func (s *medicineService) CreateMedicine(ctx context.Context, medicine *med.Medicine) error {
 
 	if err := medicine.Validate(); err != nil {
 		return err
 	}
+
+	userID := auth.GetUserIDFromContext(ctx)
+	medicine.CreatedBy = userID
+	medicine.UpdatedBy = userID
+
 	return s.medicineRepo.Create(ctx, medicine)
 }
 
-func (s *medicineService) UpdateMedicine(ctx context.Context, id uint, input domain.UpdateMedicineInput) error {
+func (s *medicineService) UpdateMedicine(ctx context.Context, id uint, input med.UpdateMedicineInput) error {
 	// Sử dụng Transaction để bọc toàn bộ quá trình Update
-	return s.medicineRepo.Transaction(func(txRepo domain.MedicineRepository) error {
+	return s.medicineRepo.Transaction(ctx, func(txCtx context.Context) error {
 
 		// 1. Lấy dữ liệu hiện tại từ DB (Dùng txRepo để đảm bảo an toàn)
-		medicine, err := txRepo.GetByID(ctx, id)
+		medicine, err := s.medicineRepo.GetByID(txCtx, id)
 		if err != nil {
-			return domain.ErrMedicineNotFound
+			return med.ErrMedicineNotFound
 		}
 
 		// 2. Mapping và chuẩn bị dữ liệu mới (Patch)
@@ -51,7 +58,10 @@ func (s *medicineService) UpdateMedicine(ctx context.Context, id uint, input dom
 			return err
 		}
 
-		return txRepo.Update(ctx, id, medicine)
+		userID := auth.GetUserIDFromContext(ctx)
+		medicine.UpdatedBy = userID
+
+		return s.medicineRepo.Update(txCtx, id, medicine)
 	})
 }
 
@@ -59,10 +69,18 @@ func (s *medicineService) DeleteMedicine(ctx context.Context, id uint) error {
 	return s.medicineRepo.Delete(ctx, id)
 }
 
-func (s *medicineService) GetMedicineByID(ctx context.Context, id uint) (*domain.Medicine, error) {
+func (s *medicineService) GetMedicineByID(ctx context.Context, id uint) (*med.Medicine, error) {
 	return s.medicineRepo.GetByID(ctx, id)
 }
 
-func (s *medicineService) GetAllMedicines(ctx context.Context, page, pageSize int) ([]domain.Medicine, *domain.Pagination, error) {
-	return s.medicineRepo.GetAll(ctx, page, pageSize)
+func (s *medicineService) GetAllMedicines(ctx context.Context, page, pageSize int, search string) ([]med.Medicine, *common.Pagination, error) {
+	return s.medicineRepo.GetAll(ctx, page, pageSize, search)
+}
+
+func (s *medicineService) GetByIDs(ctx context.Context, ids []uint) ([]med.Medicine, error) {
+	return s.medicineRepo.GetByIDs(ctx, ids)
+}
+
+func (s *medicineService) GetByIDsForUpdate(ctx context.Context, ids []uint) ([]med.Medicine, error) {
+	return s.medicineRepo.GetByIDsForUpdate(ctx, ids)
 }

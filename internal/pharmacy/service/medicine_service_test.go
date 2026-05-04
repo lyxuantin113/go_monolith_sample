@@ -5,48 +5,64 @@ import (
 	"errors"
 	"testing"
 
-	"go_monolith_sample/internal/domain"
+	"go_monolith_sample/internal/domain/common"
+	med "go_monolith_sample/internal/domain/medicine"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
 
-// Bước 1: Tạo một Mock Repository tuân thủ domain.MedicineRepository
+// Bước 1: Tạo một Mock Repository tuân thủ med.MedicineRepository
 type MockMedicineRepo struct {
 	mock.Mock
 }
 
-func (m *MockMedicineRepo) Create(ctx context.Context, medicine *domain.Medicine) error {
+func (m *MockMedicineRepo) Create(ctx context.Context, medicine *med.Medicine) error {
 	args := m.Called(ctx, medicine)
 	return args.Error(0)
 }
 
-func (m *MockMedicineRepo) GetByID(ctx context.Context, id uint) (*domain.Medicine, error) {
+func (m *MockMedicineRepo) GetByID(ctx context.Context, id uint) (*med.Medicine, error) {
 	args := m.Called(ctx, id)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*domain.Medicine), args.Error(1)
+	return args.Get(0).(*med.Medicine), args.Error(1)
 }
 
-func (m *MockMedicineRepo) Update(ctx context.Context, id uint, medicine *domain.Medicine) error {
+func (m *MockMedicineRepo) Update(ctx context.Context, id uint, medicine *med.Medicine) error {
 	args := m.Called(ctx, id, medicine)
 	return args.Error(0)
 }
 
-func (m *MockMedicineRepo) Transaction(fn func(domain.MedicineRepository) error) error {
-	// Với Unit Test, ta giả lập transaction bằng cách chạy thẳng hàm fn luôn
-	return fn(m)
+func (m *MockMedicineRepo) Transaction(ctx context.Context, fn func(txCtx context.Context) error) error {
+	return fn(ctx)
 }
 
-// Giả lập các hàm khác cho đủ Interface...
-func (m *MockMedicineRepo) GetAll(ctx context.Context, page, pageSize int) ([]domain.Medicine, *domain.Pagination, error) {
-	args := m.Called(ctx, page, pageSize)
-	return args.Get(0).([]domain.Medicine), args.Get(1).(*domain.Pagination), args.Error(2)
+func (m *MockMedicineRepo) GetAll(ctx context.Context, page, pageSize int, search string) ([]med.Medicine, *common.Pagination, error) {
+	args := m.Called(ctx, page, pageSize, search)
+	return args.Get(0).([]med.Medicine), args.Get(1).(*common.Pagination), args.Error(2)
 }
+
 func (m *MockMedicineRepo) Delete(ctx context.Context, id uint) error {
 	args := m.Called(ctx, id)
 	return args.Error(0)
+}
+
+func (m *MockMedicineRepo) GetByIDs(ctx context.Context, ids []uint) ([]med.Medicine, error) {
+	args := m.Called(ctx, ids)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]med.Medicine), args.Error(1)
+}
+
+func (m *MockMedicineRepo) GetByIDsForUpdate(ctx context.Context, ids []uint) ([]med.Medicine, error) {
+	args := m.Called(ctx, ids)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]med.Medicine), args.Error(1)
 }
 
 // Bước 2: Viết hàm Test cho UpdateMedicine
@@ -60,7 +76,7 @@ func TestUpdateMedicine_NotFound(t *testing.T) {
 	mockRepo.On("GetByID", ctx, uint(1)).Return(nil, errors.New("not found"))
 
 	// Chạy hàm cần test
-	input := domain.UpdateMedicineInput{}
+	input := med.UpdateMedicineInput{}
 	err := service.UpdateMedicine(ctx, 1, input)
 
 	// Kiểm tra kết quả
@@ -76,9 +92,9 @@ func TestUpdateMedicine_Success(t *testing.T) {
 	service := NewMedicineService(mockRepo)
 	ctx := context.Background()
 
-	oldMed := &domain.Medicine{Base: domain.Base{ID: 1}, Name: "Thuốc cũ"}
+	oldMed := &med.Medicine{Base: common.Base{ID: 1}, Name: "Thuốc cũ"}
 	newName := "Thuốc mới"
-	input := domain.UpdateMedicineInput{Name: &newName}
+	input := med.UpdateMedicineInput{Name: &newName}
 
 	// 1. Giả lập lấy được thuốc cũ
 	mockRepo.On("GetByID", ctx, uint(1)).Return(oldMed, nil)
