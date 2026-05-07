@@ -2,9 +2,12 @@ package service
 
 import (
 	"context"
+	"go_monolith_sample/internal/domain/common"
 	"go_monolith_sample/internal/domain/inventory"
 	medicine "go_monolith_sample/internal/domain/medicine"
 	"go_monolith_sample/internal/domain/sales"
+	"go_monolith_sample/pkg/auth"
+	apperror "go_monolith_sample/pkg/error"
 )
 
 type orderService struct {
@@ -13,7 +16,7 @@ type orderService struct {
 	inventoryRepo inventory.InventoryTransactionRepository
 }
 
-func NewOrderService(orderRepo sales.OrderRepository, medService medicine.MedicineService, inventoryRepo inventory.InventoryTransactionRepository) *orderService {
+func NewOrderService(orderRepo sales.OrderRepository, medService medicine.MedicineService, inventoryRepo inventory.InventoryTransactionRepository) sales.OrderService {
 	return &orderService{
 		orderRepo:     orderRepo,
 		medService:    medService,
@@ -50,6 +53,8 @@ func (s *orderService) CreateOrder(ctx context.Context, input sales.CreateOrderI
 		var totalAmount float64
 		orderItems := make([]*sales.OrderItem, 0)
 
+		userID := auth.GetUserIDFromContext(ctx)
+
 		for _, m := range txMedicines {
 			qty := itemMap[m.ID]
 			if m.Stock < qty {
@@ -67,6 +72,10 @@ func (s *orderService) CreateOrder(ctx context.Context, input sales.CreateOrderI
 				Quantity:   qty,
 				Type:       inventory.SALE,
 				Price:      m.Price,
+				Base: common.Base{
+					CreatedBy: userID,
+					// UpdatedBy: userID,
+				},
 			}
 
 			// Tạm thời cho vào danh sách để lưu sau khi có OrderID
@@ -80,7 +89,12 @@ func (s *orderService) CreateOrder(ctx context.Context, input sales.CreateOrderI
 				Quantity:   qty,
 				Price:      m.Price,
 				Total:      itemTotal,
+				Base: common.Base{
+					CreatedBy: userID,
+					UpdatedBy: userID,
+				},
 			})
+
 		}
 
 		// Tạo bản ghi Đơn hàng
@@ -88,6 +102,10 @@ func (s *orderService) CreateOrder(ctx context.Context, input sales.CreateOrderI
 			CustomerID: input.CustomerID,
 			Status:     sales.OrderStatusCompleted,
 			TotalPrice: totalAmount,
+			Base: common.Base{
+				CreatedBy: userID,
+				UpdatedBy: userID,
+			},
 		}
 
 		if err := s.orderRepo.Create(txCtx, order); err != nil {
@@ -114,4 +132,72 @@ func (s *orderService) CreateOrder(ctx context.Context, input sales.CreateOrderI
 	})
 
 	return finalOrder, err
+}
+
+func (s *orderService) RefundOrder(ctx context.Context, id uint) error {
+	order, err := s.orderRepo.GetByID(ctx, id)
+	if err != nil || order.Status != sales.OrderStatusCompleted {
+		return apperror.BadRequest("Đơn hàng không tồn tại hoặc đã được hoàn tiền", nil)
+	}
+
+	items, err := s.orderRepo.GetItemsByOrderID(ctx, id)
+	if err != nil {
+		return apperror.BadRequest("Không tìm thấy chi tiết đơn hàng", nil)
+	}
+
+	ids := make([]uint, len(items))
+	refundMap := make(map[uint]int)
+	for i, item := range items {
+		ids[i] = item.MedicineID
+		refundMap[item.MedicineID] = item.Quantity
+	}
+
+	userID := auth.GetUserIDFromContext(ctx)
+
+	err = s.orderRepo.Transaction(ctx, func(txCtx context.Context) error {
+
+		txOrder, err := s.orderRepo.GetByIDForUpdate(txCtx, id)
+		if err != nil {
+			return apperror.BadRequest("Không tìm thấy đơn hàng", nil)
+		}
+
+		// Cập nhật số lượng thuốc
+		txItems, err := s.medService.GetByIDsForUpdate(txCtx, ids)
+		if err != nil {
+			return apperror.BadRequest("Không tìm thấy chi tiết đơn hàng", nil)
+		}
+
+		for _, item := range txItems {
+			refundQty := refundMap[item.ID]
+			item.Stock += refundQty
+
+			refundLog := &inventory.InventoryTransaction{
+				MedicineID: item.ID,
+				Quantity:   refundQty,
+				Type:       inventory.REFUND,
+				Price:      item.Price,
+				Base: common.Base{
+					CreatedBy: userID,
+					UpdatedBy: userID,
+				},
+			}
+
+			if err := s.medService.UpdateMedicine(txCtx, item.ID, medicine.UpdateMedicineInput{Stock: &item.Stock}); err != nil {
+				return err
+			}
+
+			if err := s.inventoryRepo.Create(txCtx, refundLog); err != nil {
+				return err
+			}
+		}
+
+		// Status
+		txOrder.Status = sales.OrderStatusRefunded
+		if err := s.orderRepo.Update(txCtx, txOrder); err != nil {
+			return err
+		}
+		return nil
+	})
+
+	return err
 }

@@ -8,9 +8,8 @@ import (
 type OrderStatus string
 
 const (
-	OrderStatusPending   OrderStatus = "pending"
 	OrderStatusCompleted OrderStatus = "completed"
-	OrderStatusCancelled OrderStatus = "cancelled"
+	OrderStatusRefunded  OrderStatus = "refunded"
 )
 
 type Order struct {
@@ -33,10 +32,17 @@ type OrderRepository interface {
 	Create(ctx context.Context, order *Order) error
 	CreateItem(ctx context.Context, item *OrderItem) error
 	Transaction(ctx context.Context, fn func(txCtx context.Context) error) error
+
+	GetByID(ctx context.Context, id uint) (*Order, error)
+	GetByIDForUpdate(ctx context.Context, id uint) (*Order, error)
+	GetItemsByOrderID(ctx context.Context, orderID uint) ([]OrderItem, error)
+	GetItemsByOrderIDForUpdate(ctx context.Context, orderID uint) ([]OrderItem, error)
+	Update(ctx context.Context, order *Order) error
 }
 
 type OrderService interface {
 	CreateOrder(ctx context.Context, input CreateOrderInput) (*Order, error)
+	RefundOrder(ctx context.Context, orderID uint) error
 }
 
 type CreateOrderInput struct {

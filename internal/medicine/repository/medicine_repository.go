@@ -15,7 +15,7 @@ type medicineRepository struct {
 	db *gorm.DB
 }
 
-func NewMedicineRepository(db *gorm.DB) *medicineRepository {
+func NewMedicineRepository(db *gorm.DB) med.MedicineRepository {
 	return &medicineRepository{
 		db: db,
 	}
@@ -26,7 +26,7 @@ func (r *medicineRepository) Transaction(ctx context.Context, fn func(txCtx cont
 	if tx != nil {
 		return fn(ctx)
 	}
-	return r.db.Transaction(func(tx *gorm.DB) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		return fn(db.InjectTx(ctx, tx))
 	})
 }

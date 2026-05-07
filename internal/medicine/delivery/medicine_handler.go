@@ -2,7 +2,7 @@ package delivery
 
 import (
 	med "go_monolith_sample/internal/domain/medicine"
-	"go_monolith_sample/internal/pharmacy/delivery/dto"
+	"go_monolith_sample/internal/medicine/delivery/dto"
 	apperror "go_monolith_sample/pkg/error"
 	response "go_monolith_sample/pkg/response"
 	validate "go_monolith_sample/pkg/validate"
@@ -11,17 +11,17 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type MedicineHandler struct {
+type medicineHandler struct {
 	medicineService med.MedicineService
 }
 
-func NewMedicineHandler(medicineService med.MedicineService) *MedicineHandler {
-	return &MedicineHandler{
+func NewMedicineHandler(medicineService med.MedicineService) *medicineHandler {
+	return &medicineHandler{
 		medicineService: medicineService,
 	}
 }
 
-func (h *MedicineHandler) CreateMedicine(ctx *gin.Context) {
+func (h *medicineHandler) CreateMedicine(ctx *gin.Context) {
 	var medicine dto.CreateMedicineRequest
 	if err := ctx.ShouldBindJSON(&medicine); err != nil {
 		response.Error(ctx, apperror.BadRequest("Dữ liệu không hợp lệ", err))
@@ -47,7 +47,7 @@ func (h *MedicineHandler) CreateMedicine(ctx *gin.Context) {
 	response.Success(ctx, "Thuốc đã được tạo thành công", medicine, nil)
 }
 
-func (h *MedicineHandler) UpdateMedicine(ctx *gin.Context) {
+func (h *medicineHandler) UpdateMedicine(ctx *gin.Context) {
 	id, _ := strconv.Atoi(ctx.Param("id"))
 	var req dto.UpdateMedicineRequest
 
@@ -77,7 +77,7 @@ func (h *MedicineHandler) UpdateMedicine(ctx *gin.Context) {
 	response.Success(ctx, "Thuốc đã được cập nhật thành công", nil, nil)
 }
 
-func (h *MedicineHandler) DeleteMedicine(ctx *gin.Context) {
+func (h *medicineHandler) DeleteMedicine(ctx *gin.Context) {
 	id, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
 	if err != nil {
 		response.Error(ctx, apperror.BadRequest("ID không hợp lệ", err))
@@ -92,7 +92,7 @@ func (h *MedicineHandler) DeleteMedicine(ctx *gin.Context) {
 	response.Success(ctx, "Thuốc đã được xóa thành công", nil, nil)
 }
 
-func (h *MedicineHandler) GetMedicineByID(ctx *gin.Context) {
+func (h *medicineHandler) GetMedicineByID(ctx *gin.Context) {
 	id, err := strconv.Atoi(ctx.Param("id"))
 	if err != nil {
 		response.Error(ctx, apperror.BadRequest("ID không hợp lệ", err))
@@ -108,7 +108,7 @@ func (h *MedicineHandler) GetMedicineByID(ctx *gin.Context) {
 	response.Success(ctx, "Thuốc đã được lấy thành công", medicine, nil)
 }
 
-func (h *MedicineHandler) GetAllMedicines(ctx *gin.Context) {
+func (h *medicineHandler) GetAllMedicines(ctx *gin.Context) {
 	page, err := strconv.Atoi(ctx.DefaultQuery("page", "1"))
 	search := ctx.Query("search")
 

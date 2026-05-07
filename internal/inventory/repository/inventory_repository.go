@@ -16,7 +16,16 @@ func NewInventoryRepository(db *gorm.DB) inventory.InventoryTransactionRepositor
 	return &inventoryRepository{db: db}
 }
 
+func (r *inventoryRepository) Transaction(ctx context.Context, fn func(txCtx context.Context) error) error {
+	tx := db.GetTx(ctx, nil)
+	if tx != nil {
+		return fn(ctx)
+	}
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		return fn(db.InjectTx(ctx, tx))
+	})
+}
+
 func (r *inventoryRepository) Create(ctx context.Context, data *inventory.InventoryTransaction) error {
-	// Luôn dùng GetTx để đảm bảo nó có thể chạy chung Transaction với Sales
 	return db.GetTx(ctx, r.db).WithContext(ctx).Create(data).Error
 }

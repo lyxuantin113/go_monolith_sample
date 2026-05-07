@@ -2,6 +2,7 @@ package service_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	common "go_monolith_sample/internal/domain/common"
@@ -26,6 +27,29 @@ func (m *MockOrderRepo) CreateItem(ctx context.Context, item *sales.OrderItem) e
 }
 func (m *MockOrderRepo) Transaction(ctx context.Context, fn func(context.Context) error) error {
 	return fn(ctx)
+}
+func (m *MockOrderRepo) GetByID(ctx context.Context, id uint) (*sales.Order, error) {
+	args := m.Called(ctx, id)
+	return args.Get(0).(*sales.Order), args.Error(1)
+}
+
+func (m *MockOrderRepo) GetByIDForUpdate(ctx context.Context, id uint) (*sales.Order, error) {
+	args := m.Called(ctx, id)
+	return args.Get(0).(*sales.Order), args.Error(1)
+}
+
+func (m *MockOrderRepo) GetItemsByOrderID(ctx context.Context, orderID uint) ([]sales.OrderItem, error) {
+	args := m.Called(ctx, orderID)
+	return args.Get(0).([]sales.OrderItem), args.Error(1)
+}
+
+func (m *MockOrderRepo) GetItemsByOrderIDForUpdate(ctx context.Context, orderID uint) ([]sales.OrderItem, error) {
+	args := m.Called(ctx, orderID)
+	return args.Get(0).([]sales.OrderItem), args.Error(1)
+}
+
+func (m *MockOrderRepo) Update(ctx context.Context, order *sales.Order) error {
+	return m.Called(ctx, order).Error(0)
 }
 
 type MockMedService struct{ mock.Mock }
@@ -119,7 +143,139 @@ func TestCreateOrder(t *testing.T) {
 		assert.ErrorIs(t, err, medicine.ErrInsufficientStock)
 	})
 
-	t.Run("Edge Case - Medicine Not Found", func(t *testing.T) {
-		// ... Tương tự cho trường hợp len(medicines) != len(ids) ...
+	t.Run("Edge Case - IDs Mismatch (Some medicines do not exist)", func(t *testing.T) {
+		mockOrderRepo := new(MockOrderRepo)
+		mockMedService := new(MockMedService)
+		mockInvRepo := new(MockInvRepo)
+		s := service.NewOrderService(mockOrderRepo, mockMedService, mockInvRepo)
+
+		input := sales.CreateOrderInput{
+			Items: []struct {
+				MedicineID uint `json:"medicine_id" validate:"required"`
+				Quantity   int  `json:"quantity" validate:"required,gt=0"`
+			}{
+				{MedicineID: 101, Quantity: 1},
+				{MedicineID: 999, Quantity: 1}, // ID 999 không tồn tại
+			},
+		}
+
+		// Giả lập DB chỉ trả về 1 thuốc (ID 101)
+		medicines := []medicine.Medicine{{Base: common.Base{ID: 101}, Name: "Panadol", Description: "", Stock: 10, Price: 5000}}
+
+		mockMedService.On("GetByIDs", ctx, []uint{101, 999}).Return(medicines, nil)
+
+		_, err := s.CreateOrder(ctx, input)
+
+		assert.ErrorIs(t, err, medicine.ErrSomeMedicinesDoNotExist)
+	})
+
+	t.Run("Edge Case - Order Creation Failed (DB Error)", func(t *testing.T) {
+		mockOrderRepo := new(MockOrderRepo)
+		mockMedService := new(MockMedService)
+		mockInvRepo := new(MockInvRepo)
+		s := service.NewOrderService(mockOrderRepo, mockMedService, mockInvRepo)
+
+		input := sales.CreateOrderInput{
+			Items: []struct {
+				MedicineID uint `json:"medicine_id" validate:"required"`
+				Quantity   int  `json:"quantity" validate:"required,gt=0"`
+			}{{MedicineID: 101, Quantity: 1}},
+		}
+
+		medicines := []medicine.Medicine{{Base: common.Base{ID: 101}, Name: "Panadol", Description: "", Stock: 10, Price: 5000}}
+
+		// Setup Mock: Mọi thứ ok cho đến bước cuối
+		mockMedService.On("GetByIDs", ctx, []uint{101}).Return(medicines, nil)
+		mockMedService.On("GetByIDsForUpdate", ctx, []uint{101}).Return(medicines, nil)
+		mockMedService.On("UpdateMedicine", ctx, uint(101), mock.Anything).Return(nil)
+
+		// Giả lập lỗi khi lưu Order
+		mockOrderRepo.On("Create", ctx, mock.Anything).Return(errors.New("db error connection lost"))
+
+		_, err := s.CreateOrder(ctx, input)
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "db error")
+	})
+
+	t.Run("Happy Path - Refund Success", func(t *testing.T) {
+		mockRepo := new(MockOrderRepo)
+		mockMed := new(MockMedService)
+		mockInv := new(MockInvRepo)
+		s := service.NewOrderService(mockRepo, mockMed, mockInv)
+
+		orderID := uint(1)
+		order := &sales.Order{Base: common.Base{ID: orderID}, Status: sales.OrderStatusCompleted}
+		items := []sales.OrderItem{{MedicineID: 101, Quantity: 2}}
+		meds := []medicine.Medicine{{Base: common.Base{ID: 101}, Stock: 10, Price: 5000}}
+
+		mockRepo.On("GetByID", mock.Anything, orderID).Return(order, nil)
+		mockRepo.On("GetItemsByOrderID", mock.Anything, orderID).Return(items, nil)
+		mockRepo.On("GetByIDForUpdate", mock.Anything, orderID).Return(order, nil)
+		mockMed.On("GetByIDsForUpdate", mock.Anything, []uint{101}).Return(meds, nil)
+
+		mockMed.On("UpdateMedicine", mock.Anything, uint(101), mock.MatchedBy(func(in medicine.UpdateMedicineInput) bool {
+			return *in.Stock == 12 // 10 + 2
+		})).Return(nil)
+		mockInv.On("Create", mock.Anything, mock.Anything).Return(nil)
+		mockRepo.On("Update", mock.Anything, mock.Anything).Return(nil)
+
+		err := s.RefundOrder(ctx, orderID)
+
+		assert.NoError(t, err)
+		assert.Equal(t, sales.OrderStatusRefunded, order.Status)
+	})
+
+	t.Run("Edge Case - Order Not Completed", func(t *testing.T) {
+		mockRepo := new(MockOrderRepo)
+		s := service.NewOrderService(mockRepo, nil, nil)
+
+		// Đơn hàng đang Pending thì không thể Refund (phải dùng Cancel)
+		order := &sales.Order{Status: sales.OrderStatusRefunded}
+		mockRepo.On("GetByID", mock.Anything, uint(1)).Return(order, nil)
+
+		err := s.RefundOrder(ctx, 1)
+		assert.Error(t, err)
+	})
+
+	// ĐANG FAILED
+	t.Run("Edge Case - Multi-Item One Fails (Rollback Scenario)", func(t *testing.T) {
+		mockOrderRepo := new(MockOrderRepo)
+		mockMedService := new(MockMedService)
+		mockInvRepo := new(MockInvRepo)
+		s := service.NewOrderService(mockOrderRepo, mockMedService, mockInvRepo)
+
+		input := sales.CreateOrderInput{
+			Items: []struct {
+				MedicineID uint `json:"medicine_id" validate:"required"`
+				Quantity   int  `json:"quantity" validate:"required,gt=0"`
+			}{
+				{MedicineID: 101, Quantity: 1},   // Thuốc này ĐỦ hàng
+				{MedicineID: 102, Quantity: 100}, // Thuốc này THIẾU hàng
+			},
+		}
+
+		medicines := []medicine.Medicine{
+			{Base: common.Base{ID: 101}, Name: "Thuốc 1", Stock: 10, Price: 1000},
+			{Base: common.Base{ID: 102}, Name: "Thuốc 2", Stock: 5, Price: 2000},
+		}
+
+		// 1. Mock bước lấy thông tin thuốc (N+1 check)
+		mockMedService.On("GetByIDs", ctx, []uint{101, 102}).Return(medicines, nil)
+
+		// 2. Mock bước khóa thuốc trong Transaction
+		mockMedService.On("GetByIDsForUpdate", ctx, []uint{101, 102}).Return(medicines, nil)
+
+		// QUAN TRỌNG: Code sẽ loop qua từng thuốc.
+		// Vì thuốc 102 thiếu hàng, nên hàm sẽ trả về lỗi NGAY LẬP TỨC
+		// trước khi kịp gọi UpdateMedicine hay CreateOrder.
+
+		_, err := s.CreateOrder(ctx, input)
+
+		// Kết quả phải là lỗi hết hàng của thuốc 102
+		assert.ErrorIs(t, err, medicine.ErrInsufficientStock)
+
+		// Đảm bảo không có hàm update nào được gọi vì transaction đã fail từ bước check stock
+		mockMedService.AssertNotCalled(t, "UpdateMedicine", mock.Anything, mock.Anything, mock.Anything)
 	})
 }

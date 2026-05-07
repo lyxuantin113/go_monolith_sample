@@ -1,9 +1,17 @@
 package main
 
 import (
-	"go_monolith_sample/internal/pharmacy/delivery"
-	"go_monolith_sample/internal/pharmacy/repository"
-	"go_monolith_sample/internal/pharmacy/service"
+	invRepo "go_monolith_sample/internal/inventory/repository"
+	medDel "go_monolith_sample/internal/medicine/delivery"
+	medRepo "go_monolith_sample/internal/medicine/repository"
+	medSer "go_monolith_sample/internal/medicine/service"
+	purchDel "go_monolith_sample/internal/purchase/delivery"
+	purchRepo "go_monolith_sample/internal/purchase/repository"
+	purchSer "go_monolith_sample/internal/purchase/service"
+	salesDel "go_monolith_sample/internal/sales/delivery"
+	salesRepo "go_monolith_sample/internal/sales/repository"
+	salesSer "go_monolith_sample/internal/sales/service"
+
 	"go_monolith_sample/pkg/db"
 	"log"
 
@@ -19,9 +27,19 @@ func main() {
 	}
 
 	// 1. Khởi tạo các lớp (Wiring)
-	repo := repository.NewMedicineRepository(database)
-	sev := service.NewMedicineService(repo)
-	handler := delivery.NewMedicineHandler(sev)
+	invRepo := invRepo.NewInventoryRepository(database)
+
+	medRepo := medRepo.NewMedicineRepository(database)
+	medSer := medSer.NewMedicineService(medRepo)
+	medHan := medDel.NewMedicineHandler(medSer)
+
+	salesRepo := salesRepo.NewOrderRepository(database)
+	salesSer := salesSer.NewOrderService(salesRepo, medSer, invRepo)
+	salesHan := salesDel.NewOrderHandler(salesSer)
+
+	purchRepo := purchRepo.NewPurchaseOrderRepository(database)
+	purchSer := purchSer.NewPurchaseOrderService(purchRepo, medSer, invRepo)
+	purchHan := purchDel.NewPurchaseOrderHandler(purchSer)
 
 	// 2. Khởi tạo Gin
 	r := gin.Default()
@@ -31,11 +49,24 @@ func main() {
 	{
 		medicines := api.Group("/medicines")
 		{
-			medicines.POST("", handler.CreateMedicine)
-			medicines.GET("", handler.GetAllMedicines)
-			medicines.GET("/:id", handler.GetMedicineByID)
-			medicines.PUT("/:id", handler.UpdateMedicine)
-			medicines.DELETE("/:id", handler.DeleteMedicine)
+			medicines.POST("", medHan.CreateMedicine)
+			medicines.GET("", medHan.GetAllMedicines)
+			medicines.GET("/:id", medHan.GetMedicineByID)
+			medicines.PUT("/:id", medHan.UpdateMedicine)
+			medicines.DELETE("/:id", medHan.DeleteMedicine)
+		}
+
+		sales := api.Group("/sales")
+		{
+			sales.POST("", salesHan.CreateOrder)
+			sales.PUT("/:id/refund", salesHan.RefundOrder)
+		}
+
+		purchases := api.Group("/purchases")
+		{
+			purchases.POST("", purchHan.CreatePurchaseOrder)
+			purchases.PUT("/:id/complete", purchHan.CompletePurchaseOrder)
+			purchases.PUT("/:id/cancel", purchHan.CancelPurchaseOrder)
 		}
 	}
 

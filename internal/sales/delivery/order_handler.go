@@ -8,19 +8,20 @@ import (
 	apperror "go_monolith_sample/pkg/error"
 	response "go_monolith_sample/pkg/response"
 	validate "go_monolith_sample/pkg/validate"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 )
 
-type OrderHandler struct {
+type orderHandler struct {
 	salesService sales.OrderService
 }
 
-func NewOrderHandler(service sales.OrderService) *OrderHandler {
-	return &OrderHandler{salesService: service}
+func NewOrderHandler(service sales.OrderService) *orderHandler {
+	return &orderHandler{salesService: service}
 }
 
-func (h *OrderHandler) CreateOrder(ctx *gin.Context) {
+func (h *orderHandler) CreateOrder(ctx *gin.Context) {
 	var req dto.CreateOrderRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		response.Error(ctx, apperror.BadRequest("Dữ liệu không hợp lệ", err))
@@ -57,4 +58,25 @@ func (h *OrderHandler) CreateOrder(ctx *gin.Context) {
 	}
 
 	response.Success(ctx, "Đơn hàng đã được tạo thành công", data, nil)
+}
+
+func (h *orderHandler) RefundOrder(ctx *gin.Context) {
+	// 1. Lấy ID
+	idStr := ctx.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		response.Error(ctx, apperror.BadRequest("ID đơn hàng không hợp lệ", err))
+		return
+	}
+
+	// 2. Gọi Service xử lý hoàn tiền
+	err = h.salesService.RefundOrder(ctx.Request.Context(), uint(id))
+	if err != nil {
+		// Cậu có thể tùy biến thêm các loại lỗi cụ thể ở đây
+		response.Error(ctx, apperror.Internal("Không thể hoàn tiền cho đơn hàng này", err))
+		return
+	}
+
+	// 3. Trả về thành công
+	response.Success(ctx, "Đã hoàn tiền và cập nhật kho thành công", nil, nil)
 }

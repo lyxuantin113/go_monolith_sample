@@ -6,6 +6,7 @@ import (
 	"go_monolith_sample/pkg/db"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type orderRepository struct {
@@ -22,10 +23,37 @@ func (o *orderRepository) Transaction(ctx context.Context, fn func(txCtx context
 		return fn(ctx)
 	}
 
-	return o.db.Transaction(func(tx *gorm.DB) error {
-		txCtx := db.InjectTx(ctx, tx)
-		return fn(txCtx)
+	return o.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		return fn(db.InjectTx(ctx, tx))
 	})
+}
+
+func (o *orderRepository) GetByID(ctx context.Context, id uint) (*sales.Order, error) {
+	var order sales.Order
+	err := o.db.WithContext(ctx).First(&order, id).Error
+	return &order, err
+}
+
+func (o *orderRepository) GetByIDForUpdate(ctx context.Context, id uint) (*sales.Order, error) {
+	var order sales.Order
+	err := o.db.WithContext(ctx).Clauses(clause.Locking{Strength: "UPDATE"}).First(&order, id).Error
+	return &order, err
+}
+
+func (o *orderRepository) GetItemsByOrderID(ctx context.Context, orderID uint) ([]sales.OrderItem, error) {
+	var items []sales.OrderItem
+	err := o.db.WithContext(ctx).Where("order_id = ?", orderID).Find(&items).Error
+	return items, err
+}
+
+func (o *orderRepository) GetItemsByOrderIDForUpdate(ctx context.Context, orderID uint) ([]sales.OrderItem, error) {
+	var items []sales.OrderItem
+	err := o.db.WithContext(ctx).Clauses(clause.Locking{Strength: "UPDATE"}).Where("order_id = ?", orderID).Find(&items).Error
+	return items, err
+}
+
+func (o *orderRepository) Update(ctx context.Context, order *sales.Order) error {
+	return o.db.WithContext(ctx).Save(order).Error
 }
 
 func (o *orderRepository) Create(ctx context.Context, order *sales.Order) error {
