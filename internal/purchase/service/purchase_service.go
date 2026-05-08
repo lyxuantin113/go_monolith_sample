@@ -166,3 +166,29 @@ func (s *purchaseOrderService) CancelPurchaseOrder(ctx context.Context, id uint)
 		return s.repo.Update(txCtx, order)
 	})
 }
+
+func (s *purchaseOrderService) DeletePurchaseOrder(ctx context.Context, id uint) error {
+	_, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return apperror.NotFound("Không tìm thấy đơn hàng", nil)
+	}
+
+	_, err = s.repo.GetItemsByOrderID(ctx, id)
+	if err != nil {
+		return apperror.NotFound("Không tìm thấy chi tiết đơn hàng", nil)
+	}
+
+	err = s.repo.Transaction(ctx, func(txCtx context.Context) error {
+		if err := s.repo.Delete(txCtx, id); err != nil {
+			return err
+		}
+
+		if err := s.repo.DeleteItemsByOrderID(txCtx, id); err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	return err
+}

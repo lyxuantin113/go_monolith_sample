@@ -80,3 +80,23 @@ func (h *orderHandler) RefundOrder(ctx *gin.Context) {
 	// 3. Trả về thành công
 	response.Success(ctx, "Đã hoàn tiền và cập nhật kho thành công", nil, nil)
 }
+
+func (h *orderHandler) DeleteOrder(ctx *gin.Context) {
+	// 1. Lấy ID
+	idStr := ctx.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		response.Error(ctx, apperror.BadRequest("ID đơn hàng không hợp lệ", err))
+		return
+	}
+
+	// 2. Gọi Service xử lý xóa đơn hàng
+	err = h.salesService.DeleteOrder(ctx.Request.Context(), uint(id))
+	if err != nil {
+		response.Error(ctx, apperror.Internal("Không thể xóa đơn hàng này", err))
+		return
+	}
+
+	// 3. Trả về thành công
+	response.Success(ctx, "Đơn hàng đã được xóa thành công", nil, nil)
+}

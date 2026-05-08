@@ -5,6 +5,7 @@ import (
 	"go_monolith_sample/internal/domain/common"
 	med "go_monolith_sample/internal/domain/medicine"
 	"go_monolith_sample/pkg/auth"
+	apperror "go_monolith_sample/pkg/error"
 )
 
 type medicineService struct {
@@ -66,6 +67,12 @@ func (s *medicineService) UpdateMedicine(ctx context.Context, id uint, input med
 }
 
 func (s *medicineService) DeleteMedicine(ctx context.Context, id uint) error {
+
+	_, err := s.medicineRepo.GetByID(ctx, id)
+	if err != nil {
+		return apperror.NotFound("Không tìm thấy thuốc", nil)
+	}
+
 	return s.medicineRepo.Delete(ctx, id)
 }
 

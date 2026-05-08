@@ -24,3 +24,11 @@ func NotFound(msg string, err error) *AppError {
 func Internal(msg string, err error) *AppError {
 	return &AppError{StatusCode: http.StatusInternalServerError, Message: msg, RawError: err}
 }
+
+func Unauthorized(msg string, err error) *AppError {
+	return &AppError{StatusCode: http.StatusUnauthorized, Message: msg, RawError: err}
+}
+
+func Forbidden(msg string, err error) *AppError {
+	return &AppError{StatusCode: http.StatusForbidden, Message: msg, RawError: err}
+}

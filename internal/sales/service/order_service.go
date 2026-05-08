@@ -55,11 +55,17 @@ func (s *orderService) CreateOrder(ctx context.Context, input sales.CreateOrderI
 
 		userID := auth.GetUserIDFromContext(ctx)
 
+		// Duyệt Stock trước
 		for _, m := range txMedicines {
 			qty := itemMap[m.ID]
 			if m.Stock < qty {
 				return medicine.ErrInsufficientStock
 			}
+		}
+
+		// Thực thi nếu đủ số lượng
+		for _, m := range txMedicines {
+			qty := itemMap[m.ID]
 
 			// Trừ kho
 			m.Stock -= qty
@@ -196,6 +202,32 @@ func (s *orderService) RefundOrder(ctx context.Context, id uint) error {
 		if err := s.orderRepo.Update(txCtx, txOrder); err != nil {
 			return err
 		}
+		return nil
+	})
+
+	return err
+}
+
+func (s *orderService) DeleteOrder(ctx context.Context, orderID uint) error {
+	_, err := s.orderRepo.GetByID(ctx, orderID)
+	if err != nil {
+		return apperror.NotFound("Không tìm thấy đơn hàng", nil)
+	}
+
+	_, err = s.orderRepo.GetItemsByOrderID(ctx, orderID)
+	if err != nil {
+		return apperror.NotFound("Không tìm thấy chi tiết đơn hàng", nil)
+	}
+
+	err = s.orderRepo.Transaction(ctx, func(txCtx context.Context) error {
+		if err := s.orderRepo.Delete(txCtx, orderID); err != nil {
+			return err
+		}
+
+		if err := s.orderRepo.DeleteItemsByOrderID(txCtx, orderID); err != nil {
+			return err
+		}
+
 		return nil
 	})
 

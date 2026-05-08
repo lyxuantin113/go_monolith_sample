@@ -2,6 +2,7 @@ package service_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"go_monolith_sample/internal/domain/common"
@@ -48,6 +49,14 @@ func (m *MockPurchaseRepo) GetItemsByOrderIDForUpdate(ctx context.Context, order
 
 func (m *MockPurchaseRepo) Update(ctx context.Context, order *purchase.PurchaseOrder) error {
 	return m.Called(ctx, order).Error(0)
+}
+
+func (m *MockPurchaseRepo) Delete(ctx context.Context, id uint) error {
+	return m.Called(ctx, id).Error(0)
+}
+
+func (m *MockPurchaseRepo) DeleteItemsByOrderID(ctx context.Context, orderID uint) error {
+	return m.Called(ctx, orderID).Error(0)
 }
 
 type MockMedService struct{ mock.Mock }
@@ -185,33 +194,31 @@ func TestCreatePurchaseOrder(t *testing.T) {
 		assert.Contains(t, err.Error(), "đã được xử lý")
 	})
 
-	// ĐANG FAILED
-	// t.Run("Edge Case - DB Error During Inbound Update", func(t *testing.T) {
-	// 	mockRepo := new(MockPurchaseRepo)
-	// 	mockMed := new(MockMedService)
-	// 	mockInv := new(MockInvRepo)
-	// 	s := service.NewPurchaseOrderService(mockRepo, mockMed, mockInv)
+	t.Run("Edge Case - DB Error During Inbound Update", func(t *testing.T) {
+		mockRepo := new(MockPurchaseRepo)
+		mockMed := new(MockMedService)
+		mockInv := new(MockInvRepo)
+		s := service.NewPurchaseOrderService(mockRepo, mockMed, mockInv)
 
-	// 	input := purchase.CreatePurchaseOrderInput{
-	// 		Items: []struct {
-	// 			MedicineID uint    `json:"medicine_id" binding:"required" validate:"required"`
-	// 			Quantity   int     `json:"quantity" binding:"required" validate:"required,gt=0"`
-	// 			Price      float64 `json:"price" binding:"required" validate:"required,gt=0"`
-	// 		}{{MedicineID: 10, Quantity: 100, Price: 1000}},
-	// 	}
+		input := purchase.CreatePurchaseOrderInput{
+			Items: []struct {
+				MedicineID uint    `json:"medicine_id" binding:"required" validate:"required"`
+				Quantity   int     `json:"quantity" binding:"required" validate:"required,gt=0"`
+				Price      float64 `json:"price" binding:"required" validate:"required,gt=0"`
+			}{{MedicineID: 10, Quantity: 100, Price: 1000}},
+		}
 
-	// 	medicines := []medicine.Medicine{{Base: common.Base{ID: 10}, Name: "Thuốc A", Stock: 50, Price: 2000}}
+		medicines := []medicine.Medicine{{Base: common.Base{ID: 10}, Name: "Thuốc A", Stock: 50, Price: 2000}}
 
-	// 	mockMed.On("GetByIDs", ctx, []uint{10}).Return(medicines, nil)
-	// 	mockMed.On("GetByIDsForUpdate", ctx, []uint{10}).Return(medicines, nil)
-	// 	mockRepo.On("CreatePurchaseOrder", ctx, mock.Anything).Return(nil)
+		mockMed.On("GetByIDs", ctx, []uint{10}).Return(medicines, nil)
+		mockMed.On("GetByIDsForUpdate", ctx, []uint{10}).Return(medicines, nil)
+		mockRepo.On("CreatePurchaseOrder", ctx, mock.Anything).Return(nil)
 
-	// 	// Giả lập lỗi khi cập nhật kho
-	// 	mockMed.On("UpdateMedicine", ctx, uint(10), mock.Anything).Return(errors.New("db connection timeout"))
+		// Giả lập lỗi khi cập nhật kho
+		mockRepo.On("CreatePurchaseOrderItem", ctx, mock.Anything).Return(errors.New("db connection timeout"))
+		_, err := s.CreatePurchaseOrder(ctx, input)
 
-	// 	_, err := s.CreatePurchaseOrder(ctx, input)
-
-	// 	assert.Error(t, err)
-	// 	assert.Contains(t, err.Error(), "timeout")
-	// })
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "timeout")
+	})
 }

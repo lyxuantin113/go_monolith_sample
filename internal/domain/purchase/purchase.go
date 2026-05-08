@@ -47,12 +47,15 @@ type PurchaseOrderRepository interface {
 	GetItemsByOrderID(ctx context.Context, orderID uint) ([]PurchaseOrderItem, error)
 	GetItemsByOrderIDForUpdate(ctx context.Context, orderID uint) ([]PurchaseOrderItem, error)
 	Update(ctx context.Context, order *PurchaseOrder) error
+	Delete(ctx context.Context, id uint) error
+	DeleteItemsByOrderID(ctx context.Context, orderID uint) error
 }
 
 type PurchaseOrderService interface {
 	CreatePurchaseOrder(ctx context.Context, input CreatePurchaseOrderInput) (*PurchaseOrder, error)
 	CompletePurchaseOrder(ctx context.Context, id uint) error
 	CancelPurchaseOrder(ctx context.Context, id uint) error
+	DeletePurchaseOrder(ctx context.Context, id uint) error
 }
 
 type CreatePurchaseOrderInput struct {

@@ -38,11 +38,14 @@ type OrderRepository interface {
 	GetItemsByOrderID(ctx context.Context, orderID uint) ([]OrderItem, error)
 	GetItemsByOrderIDForUpdate(ctx context.Context, orderID uint) ([]OrderItem, error)
 	Update(ctx context.Context, order *Order) error
+	Delete(ctx context.Context, id uint) error
+	DeleteItemsByOrderID(ctx context.Context, orderID uint) error
 }
 
 type OrderService interface {
 	CreateOrder(ctx context.Context, input CreateOrderInput) (*Order, error)
 	RefundOrder(ctx context.Context, orderID uint) error
+	DeleteOrder(ctx context.Context, orderID uint) error
 }
 
 type CreateOrderInput struct {

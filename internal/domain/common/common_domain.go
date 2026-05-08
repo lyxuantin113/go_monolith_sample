@@ -1,6 +1,10 @@
 package common
 
-import "time"
+import (
+	"time"
+
+	"gorm.io/gorm"
+)
 
 type Pagination struct {
 	Page     int   `json:"page" default:"1"`
@@ -9,10 +13,10 @@ type Pagination struct {
 }
 
 type Base struct {
-	ID        uint       `gorm:"primarykey" json:"id"`
-	CreatedAt time.Time  `gorm:"autoCreateTime" json:"created_at"`
-	UpdatedAt time.Time  `gorm:"autoUpdateTime" json:"updated_at"`
-	DeletedAt *time.Time `gorm:"index" json:"-"`
-	CreatedBy uint       `json:"created_by"`
-	UpdatedBy uint       `json:"updated_by"`
+	ID        uint           `gorm:"primarykey" json:"id"`
+	CreatedAt time.Time      `gorm:"autoCreateTime" json:"created_at"`
+	UpdatedAt time.Time      `gorm:"autoUpdateTime" json:"updated_at"`
+	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
+	CreatedBy uint           `json:"created_by"`
+	UpdatedBy uint           `json:"updated_by"`
 }

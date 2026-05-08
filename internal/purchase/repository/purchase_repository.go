@@ -63,3 +63,11 @@ func (r *purchaseOrderRepository) GetByIDForUpdate(ctx context.Context, id uint)
 func (r *purchaseOrderRepository) Update(ctx context.Context, order *purchase.PurchaseOrder) error {
 	return db.GetTx(ctx, r.db).WithContext(ctx).Save(order).Error
 }
+
+func (r *purchaseOrderRepository) Delete(ctx context.Context, id uint) error {
+	return db.GetTx(ctx, r.db).WithContext(ctx).Delete(&purchase.PurchaseOrder{}, id).Error
+}
+
+func (r *purchaseOrderRepository) DeleteItemsByOrderID(ctx context.Context, orderID uint) error {
+	return db.GetTx(ctx, r.db).WithContext(ctx).Where("purchase_order_id = ?", orderID).Delete(&purchase.PurchaseOrderItem{}).Error
+}

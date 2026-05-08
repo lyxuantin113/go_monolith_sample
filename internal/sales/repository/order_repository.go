@@ -63,3 +63,11 @@ func (o *orderRepository) Create(ctx context.Context, order *sales.Order) error 
 func (o *orderRepository) CreateItem(ctx context.Context, item *sales.OrderItem) error {
 	return o.db.WithContext(ctx).Create(item).Error
 }
+
+func (o *orderRepository) Delete(ctx context.Context, id uint) error {
+	return o.db.WithContext(ctx).Delete(&sales.Order{}, id).Error
+}
+
+func (o *orderRepository) DeleteItemsByOrderID(ctx context.Context, orderID uint) error {
+	return o.db.WithContext(ctx).Where("order_id = ?", orderID).Delete(&sales.OrderItem{}).Error
+}
